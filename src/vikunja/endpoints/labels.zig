@@ -232,6 +232,8 @@ fn intParam(params: json.Value, key: []const u8) ?i64 {
     return switch (val) {
         .integer => |n| n,
         .float => |f| @intFromFloat(f),
+        // Some LLMs (e.g. MiniMax) encode integers as JSON strings.
+        .string => |s| std.fmt.parseInt(i64, s, 10) catch null,
         else => null,
     };
 }
