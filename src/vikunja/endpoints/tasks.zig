@@ -329,6 +329,35 @@ pub fn addComment(arena: std.mem.Allocator, client: *Client, task_id: i64, comme
     return client.put(arena, path, body);
 }
 
+/// List assignees for a task — returns raw JSON body
+pub fn listAssignees(arena: std.mem.Allocator, client: *Client, task_id: i64) ![]u8 {
+    var path_buf: [64]u8 = undefined;
+    const path = try std.fmt.bufPrint(&path_buf, "/tasks/{}/assignees", .{task_id});
+    return client.get(arena, path);
+}
+
+/// Assign a user to a task — returns raw JSON body
+pub fn assignTask(arena: std.mem.Allocator, client: *Client, task_id: i64, user_id: i64) ![]u8 {
+    var path_buf: [64]u8 = undefined;
+    const path = try std.fmt.bufPrint(&path_buf, "/tasks/{}/assignees", .{task_id});
+    const AssignRequest = struct { user_id: i64 };
+    const body = try std.json.Stringify.valueAlloc(arena, AssignRequest{ .user_id = user_id }, .{});
+    return client.put(arena, path, body);
+}
+
+/// Remove an assignee from a task
+pub fn unassignTask(arena: std.mem.Allocator, client: *Client, task_id: i64, user_id: i64) !void {
+    var path_buf: [128]u8 = undefined;
+    const path = try std.fmt.bufPrint(&path_buf, "/tasks/{}/assignees/{}", .{ task_id, user_id });
+    try client.delete(arena, path);
+}
+
+/// Delete a relation between two tasks
+pub fn deleteRelation(arena: std.mem.Allocator, client: *Client, task_id: i64, other_task_id: i64, kind: RelationKind) !void {
+    const path = try std.fmt.allocPrint(arena, "/tasks/{}/relations/{s}/{}", .{ task_id, @tagName(kind), other_task_id });
+    try client.delete(arena, path);
+}
+
 /// Create task relation — returns raw JSON body.
 pub fn createRelation(arena: std.mem.Allocator, client: *Client, task_id: i64, other_task_id: i64, kind: RelationKind) ![]u8 {
     var path_buf: [64]u8 = undefined;
@@ -422,6 +451,54 @@ pub const tools = [_]mcp.Server.Tool{
         ,
         .handler = handleAddComment,
     },
+    .{
+        .name = "vikunja_list_comments",
+        .description = "List all comments on a task",
+        .input_schema =
+        \\{"type":"object","properties":{"task_id":{"type":"integer"}},"required":["task_id"]}
+        ,
+        .handler = handleListComments,
+    },
+    .{
+        .name = "vikunja_list_assignees",
+        .description = "List all assignees of a task",
+        .input_schema =
+        \\{"type":"object","properties":{"task_id":{"type":"integer"}},"required":["task_id"]}
+        ,
+        .handler = handleListAssignees,
+    },
+    .{
+        .name = "vikunja_assign_task",
+        .description = "Assign a user to a task",
+        .input_schema =
+        \\{"type":"object","properties":{"task_id":{"type":"integer"},"user_id":{"type":"integer"}},"required":["task_id","user_id"]}
+        ,
+        .handler = handleAssignTask,
+    },
+    .{
+        .name = "vikunja_unassign_task",
+        .description = "Remove a user assignment from a task",
+        .input_schema =
+        \\{"type":"object","properties":{"task_id":{"type":"integer"},"user_id":{"type":"integer"}},"required":["task_id","user_id"]}
+        ,
+        .handler = handleUnassignTask,
+    },
+    .{
+        .name = "vikunja_create_relation",
+        .description = "Create a relation between two tasks (e.g. subtask, blocking, related)",
+        .input_schema =
+        \\{"type":"object","properties":{"task_id":{"type":"integer"},"other_task_id":{"type":"integer"},"relation_kind":{"type":"string","enum":["subtask","parenttask","related","duplicateof","blocking","blocked","precedes","follows"]}},"required":["task_id","other_task_id","relation_kind"]}
+        ,
+        .handler = handleCreateRelation,
+    },
+    .{
+        .name = "vikunja_delete_relation",
+        .description = "Delete a relation between two tasks",
+        .input_schema =
+        \\{"type":"object","properties":{"task_id":{"type":"integer"},"other_task_id":{"type":"integer"},"relation_kind":{"type":"string","enum":["subtask","parenttask","related","duplicateof","blocking","blocked","precedes","follows"]}},"required":["task_id","other_task_id","relation_kind"]}
+        ,
+        .handler = handleDeleteRelation,
+    },
 };
 
 // ============================================================================
@@ -492,6 +569,53 @@ fn handleAddComment(arena: std.mem.Allocator, client: *Client, params: json.Valu
     const task_id = intParam(params, "task_id") orelse return error.MissingParam;
     const comment = strParam(params, "comment") orelse return error.MissingParam;
     return addComment(arena, client, task_id, comment);
+}
+
+fn handleListComments(arena: std.mem.Allocator, client: *Client, params: json.Value) ![]const u8 {
+    const task_id = intParam(params, "task_id") orelse return error.MissingParam;
+    return listComments(arena, client, task_id);
+}
+
+fn handleListAssignees(arena: std.mem.Allocator, client: *Client, params: json.Value) ![]const u8 {
+    const task_id = intParam(params, "task_id") orelse return error.MissingParam;
+    return listAssignees(arena, client, task_id);
+}
+
+fn handleAssignTask(arena: std.mem.Allocator, client: *Client, params: json.Value) ![]const u8 {
+    const task_id = intParam(params, "task_id") orelse return error.MissingParam;
+    const user_id = intParam(params, "user_id") orelse return error.MissingParam;
+    return assignTask(arena, client, task_id, user_id);
+}
+
+fn handleUnassignTask(arena: std.mem.Allocator, client: *Client, params: json.Value) ![]const u8 {
+    const task_id = intParam(params, "task_id") orelse return error.MissingParam;
+    const user_id = intParam(params, "user_id") orelse return error.MissingParam;
+    try unassignTask(arena, client, task_id, user_id);
+    return arena.dupe(u8, "true");
+}
+
+fn handleCreateRelation(arena: std.mem.Allocator, client: *Client, params: json.Value) ![]const u8 {
+    const task_id = intParam(params, "task_id") orelse return error.MissingParam;
+    const other_task_id = intParam(params, "other_task_id") orelse return error.MissingParam;
+    const kind_str = strParam(params, "relation_kind") orelse return error.MissingParam;
+    const kind = relationKindFromString(kind_str) orelse return error.InvalidParam;
+    return createRelation(arena, client, task_id, other_task_id, kind);
+}
+
+fn handleDeleteRelation(arena: std.mem.Allocator, client: *Client, params: json.Value) ![]const u8 {
+    const task_id = intParam(params, "task_id") orelse return error.MissingParam;
+    const other_task_id = intParam(params, "other_task_id") orelse return error.MissingParam;
+    const kind_str = strParam(params, "relation_kind") orelse return error.MissingParam;
+    const kind = relationKindFromString(kind_str) orelse return error.InvalidParam;
+    try deleteRelation(arena, client, task_id, other_task_id, kind);
+    return arena.dupe(u8, "true");
+}
+
+fn relationKindFromString(s: []const u8) ?RelationKind {
+    inline for (@typeInfo(RelationKind).@"enum".fields) |f| {
+        if (std.mem.eql(u8, s, f.name)) return @enumFromInt(f.value);
+    }
+    return null;
 }
 
 // ============================================================================

@@ -179,10 +179,26 @@ pub const tools = [_]mcp.Server.Tool{
         .handler = handleAddLabelToTask,
     },
     .{
+        .name = "vikunja_remove_label_from_task",
+        .description = "Remove a label from a task",
+        .input_schema =
+        \\{"type":"object","properties":{"task_id":{"type":"integer"},"label_id":{"type":"integer"}},"required":["task_id","label_id"]}
+        ,
+        .handler = handleRemoveLabelFromTask,
+    },
+    .{
         .name = "vikunja_list_filters",
         .description = "List all saved filters",
         .input_schema = "{}",
         .handler = handleListFilters,
+    },
+    .{
+        .name = "vikunja_delete_filter",
+        .description = "Delete a saved filter",
+        .input_schema =
+        \\{"type":"object","properties":{"id":{"type":"integer"}},"required":["id"]}
+        ,
+        .handler = handleDeleteFilter,
     },
 };
 
@@ -220,6 +236,19 @@ fn handleAddLabelToTask(arena: std.mem.Allocator, client: *Client, params: json.
 fn handleListFilters(arena: std.mem.Allocator, client: *Client, params: json.Value) ![]const u8 {
     _ = params;
     return listFilters(arena, client);
+}
+
+fn handleRemoveLabelFromTask(arena: std.mem.Allocator, client: *Client, params: json.Value) ![]const u8 {
+    const task_id = intParam(params, "task_id") orelse return error.MissingParam;
+    const label_id = intParam(params, "label_id") orelse return error.MissingParam;
+    try removeLabelFromTask(arena, client, task_id, label_id);
+    return arena.dupe(u8, "true");
+}
+
+fn handleDeleteFilter(arena: std.mem.Allocator, client: *Client, params: json.Value) ![]const u8 {
+    const id = intParam(params, "id") orelse return error.MissingParam;
+    try deleteFilter(arena, client, id);
+    return arena.dupe(u8, "true");
 }
 
 // ============================================================================

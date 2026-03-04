@@ -306,6 +306,14 @@ pub const tools = [_]mcp.Server.Tool{
         .handler = handleDeleteProject,
     },
     .{
+        .name = "vikunja_duplicate_project",
+        .description = "Duplicate an existing project",
+        .input_schema =
+        \\{"type":"object","properties":{"id":{"type":"integer"}},"required":["id"]}
+        ,
+        .handler = handleDuplicateProject,
+    },
+    .{
         .name = "vikunja_list_views",
         .description = "List all views for a project",
         .input_schema =
@@ -322,6 +330,14 @@ pub const tools = [_]mcp.Server.Tool{
         .handler = handleCreateView,
     },
     .{
+        .name = "vikunja_delete_view",
+        .description = "Delete a view from a project",
+        .input_schema =
+        \\{"type":"object","properties":{"project_id":{"type":"integer"},"view_id":{"type":"integer"}},"required":["project_id","view_id"]}
+        ,
+        .handler = handleDeleteView,
+    },
+    .{
         .name = "vikunja_list_buckets",
         .description = "List all Kanban buckets for a view",
         .input_schema =
@@ -336,6 +352,14 @@ pub const tools = [_]mcp.Server.Tool{
         \\{"type":"object","properties":{"project_id":{"type":"integer"},"view_id":{"type":"integer"},"title":{"type":"string"}},"required":["project_id","view_id","title"]}
         ,
         .handler = handleCreateBucket,
+    },
+    .{
+        .name = "vikunja_delete_bucket",
+        .description = "Delete a Kanban bucket",
+        .input_schema =
+        \\{"type":"object","properties":{"project_id":{"type":"integer"},"view_id":{"type":"integer"},"bucket_id":{"type":"integer"}},"required":["project_id","view_id","bucket_id"]}
+        ,
+        .handler = handleDeleteBucket,
     },
     .{
         .name = "vikunja_list_project_shares",
@@ -392,6 +416,26 @@ fn handleUpdateProject(arena: std.mem.Allocator, client: *Client, params: json.V
 fn handleDeleteProject(arena: std.mem.Allocator, client: *Client, params: json.Value) ![]const u8 {
     const id = intParam(params, "id") orelse return error.MissingParam;
     try deleteProject(arena, client, id);
+    return arena.dupe(u8, "true");
+}
+
+fn handleDuplicateProject(arena: std.mem.Allocator, client: *Client, params: json.Value) ![]const u8 {
+    const id = intParam(params, "id") orelse return error.MissingParam;
+    return duplicateProject(arena, client, id);
+}
+
+fn handleDeleteView(arena: std.mem.Allocator, client: *Client, params: json.Value) ![]const u8 {
+    const project_id = intParam(params, "project_id") orelse return error.MissingParam;
+    const view_id = intParam(params, "view_id") orelse return error.MissingParam;
+    try deleteView(arena, client, project_id, view_id);
+    return arena.dupe(u8, "true");
+}
+
+fn handleDeleteBucket(arena: std.mem.Allocator, client: *Client, params: json.Value) ![]const u8 {
+    const project_id = intParam(params, "project_id") orelse return error.MissingParam;
+    const view_id = intParam(params, "view_id") orelse return error.MissingParam;
+    const bucket_id = intParam(params, "bucket_id") orelse return error.MissingParam;
+    try deleteBucket(arena, client, project_id, view_id, bucket_id);
     return arena.dupe(u8, "true");
 }
 

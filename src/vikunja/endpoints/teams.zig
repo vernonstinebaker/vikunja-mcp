@@ -166,6 +166,22 @@ pub const tools = [_]mcp.Server.Tool{
         ,
         .handler = handleAddTeamMember,
     },
+    .{
+        .name = "vikunja_update_team",
+        .description = "Update a team's name, description, or visibility",
+        .input_schema =
+        \\{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"description":{"type":"string"},"is_public":{"type":"boolean"}},"required":["id"]}
+        ,
+        .handler = handleUpdateTeam,
+    },
+    .{
+        .name = "vikunja_remove_team_member",
+        .description = "Remove a member from a team",
+        .input_schema =
+        \\{"type":"object","properties":{"team_id":{"type":"integer"},"user_id":{"type":"integer"}},"required":["team_id","user_id"]}
+        ,
+        .handler = handleRemoveTeamMember,
+    },
 };
 
 // ============================================================================
@@ -208,6 +224,23 @@ fn handleAddTeamMember(arena: std.mem.Allocator, client: *Client, params: json.V
     const admin = boolParam(params, "admin") orelse false;
     const req: TeamMemberAdd = .{ .user_id = user_id, .admin = admin };
     return addTeamMember(arena, client, team_id, req);
+}
+
+fn handleUpdateTeam(arena: std.mem.Allocator, client: *Client, params: json.Value) ![]const u8 {
+    const id = intParam(params, "id") orelse return error.MissingParam;
+    const req: TeamUpdate = .{
+        .name = strParam(params, "name"),
+        .description = strParam(params, "description"),
+        .is_public = boolParam(params, "is_public"),
+    };
+    return updateTeam(arena, client, id, req);
+}
+
+fn handleRemoveTeamMember(arena: std.mem.Allocator, client: *Client, params: json.Value) ![]const u8 {
+    const team_id = intParam(params, "team_id") orelse return error.MissingParam;
+    const user_id = intParam(params, "user_id") orelse return error.MissingParam;
+    try removeTeamMember(arena, client, team_id, user_id);
+    return arena.dupe(u8, "true");
 }
 
 // ============================================================================

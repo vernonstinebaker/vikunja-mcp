@@ -98,6 +98,11 @@ pub fn deleteShare(arena: std.mem.Allocator, client: *Client, project_id: i64, h
     try client.delete(arena, path);
 }
 
+/// Get the current authenticated user — returns raw JSON body
+pub fn getCurrentUser(arena: std.mem.Allocator, client: *Client) ![]u8 {
+    return client.get(arena, "/user");
+}
+
 // ============================================================================
 // MCP Tool Definitions
 // ============================================================================
@@ -150,6 +155,12 @@ pub const tools = [_]mcp.Server.Tool{
         \\{"type":"object","properties":{"project_id":{"type":"integer"},"hash":{"type":"string"}},"required":["project_id","hash"]}
         ,
         .handler = handleDeleteShare,
+    },
+    .{
+        .name = "vikunja_get_current_user",
+        .description = "Get the current authenticated Vikunja user (id, username, email)",
+        .input_schema = "{}",
+        .handler = handleGetCurrentUser,
     },
 };
 
@@ -207,6 +218,11 @@ fn handleDeleteShare(arena: std.mem.Allocator, client: *Client, params: json.Val
     const hash = strParam(params, "hash") orelse return error.MissingParam;
     try deleteShare(arena, client, project_id, hash);
     return arena.dupe(u8, "true");
+}
+
+fn handleGetCurrentUser(arena: std.mem.Allocator, client: *Client, params: json.Value) ![]const u8 {
+    _ = params;
+    return getCurrentUser(arena, client);
 }
 
 // ============================================================================
