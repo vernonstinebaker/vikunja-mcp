@@ -175,6 +175,72 @@ pub fn listTasks(arena: std.mem.Allocator, client: *Client, filter: ?[]const u8)
     return all.toOwnedSlice(arena);
 }
 
+/// Count all tasks matching an optional filter, paginating through all pages.
+/// Returns the total count as a usize.
+pub fn countTasks(arena: std.mem.Allocator, client: *Client, filter: ?[]const u8) !usize {
+    var page: u32 = 1;
+    var total: usize = 0;
+    while (true) {
+        const path = if (filter) |f|
+            try std.fmt.allocPrint(arena, "/tasks?page={}&per_page={}&filter={s}", .{ page, PAGE_SIZE, f })
+        else
+            try std.fmt.allocPrint(arena, "/tasks?page={}&per_page={}", .{ page, PAGE_SIZE });
+
+        const body = try client.get(arena, path);
+        const trimmed = std.mem.trim(u8, body, " \t\r\n");
+        if (trimmed.len < 2) break;
+        const inner = trimmed[1 .. trimmed.len - 1];
+        const stripped = std.mem.trim(u8, inner, " \t\r\n");
+        if (stripped.len == 0) break;
+
+        var item_count: usize = 0;
+        var depth: usize = 0;
+        for (stripped) |c| {
+            if (c == '{') {
+                if (depth == 0) item_count += 1;
+                depth += 1;
+            } else if (c == '}') {
+                if (depth > 0) depth -= 1;
+            }
+        }
+        total += item_count;
+        if (item_count < PAGE_SIZE) break;
+        page += 1;
+    }
+    return total;
+}
+
+/// Count tasks in a project, paginating through all pages.
+/// Returns the total count as a usize.
+pub fn countProjectTasks(arena: std.mem.Allocator, client: *Client, project_id: i64) !usize {
+    var page: u32 = 1;
+    var total: usize = 0;
+    while (true) {
+        const path = try std.fmt.allocPrint(arena, "/projects/{}/tasks?page={}&per_page={}", .{ project_id, page, PAGE_SIZE });
+        const body = try client.get(arena, path);
+        const trimmed = std.mem.trim(u8, body, " \t\r\n");
+        if (trimmed.len < 2) break;
+        const inner = trimmed[1 .. trimmed.len - 1];
+        const stripped = std.mem.trim(u8, inner, " \t\r\n");
+        if (stripped.len == 0) break;
+
+        var item_count: usize = 0;
+        var depth: usize = 0;
+        for (stripped) |c| {
+            if (c == '{') {
+                if (depth == 0) item_count += 1;
+                depth += 1;
+            } else if (c == '}') {
+                if (depth > 0) depth -= 1;
+            }
+        }
+        total += item_count;
+        if (item_count < PAGE_SIZE) break;
+        page += 1;
+    }
+    return total;
+}
+
 /// List tasks in a project, paginating through all pages.
 /// Returns a JSON array string combining all pages.
 pub fn listProjectTasks(arena: std.mem.Allocator, client: *Client, project_id: i64, _: ?u32) ![]u8 {
@@ -301,6 +367,14 @@ pub const tools = [_]mcp.Server.Tool{
         .handler = handleListTasks,
     },
     .{
+        .name = "vikunja_count_tasks",
+        .description = "Count tasks with optional filter or project_id. Returns a single integer. Use this instead of vikunja_list_tasks when you only need a count.",
+        .input_schema =
+        \\{"type":"object","properties":{"filter":{"type":"string","description":"Vikunja filter query (e.g. 'done = true')"},"project_id":{"type":"integer","description":"Limit to a specific project"}}}
+        ,
+        .handler = handleCountTasks,
+    },
+    .{
         .name = "vikunja_get_task",
         .description = "Get details of a specific task",
         .input_schema =
@@ -353,6 +427,16 @@ pub const tools = [_]mcp.Server.Tool{
 // ============================================================================
 // Handlers
 // ============================================================================
+
+fn handleCountTasks(arena: std.mem.Allocator, client: *Client, params: json.Value) ![]const u8 {
+    const project_id = intParam(params, "project_id");
+    const filter = strParam(params, "filter");
+    const n = if (project_id) |pid|
+        try countProjectTasks(arena, client, pid)
+    else
+        try countTasks(arena, client, filter);
+    return std.fmt.allocPrint(arena, "{}", .{n});
+}
 
 fn handleListTasks(arena: std.mem.Allocator, client: *Client, params: json.Value) ![]const u8 {
     const project_id = intParam(params, "project_id");
