@@ -1,0 +1,12 @@
+.{
+    .name = .vikunja_mcp,
+    .version = "0.1.0",
+    .fingerprint = 0x7164cdcd7a1edc92,
+    .minimum_zig_version = "0.13.0",
+    .dependencies = .{},
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
